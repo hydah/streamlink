@@ -1,0 +1,29 @@
+server:
+  http_port: 8080
+  udp_port: 8000
+  public_ip:
+    - 192.168.255.10
+llm:
+  type: openai
+  openai:
+    api_key: $SILICON_API_KEY
+    base_url: https://api.siliconflow.cn/v1
+    model: Pro/deepseek-ai/DeepSeek-V3
+    temperature: 0.5
+    max_tokens: 1000
+asr:
+  type: tencent
+  tencent_asr:
+    app_id: $TENCENTASR_APP_ID
+    secret_id: $TENCENTASR_SECRET_ID
+    secret_key: $TENCENTASR_SECRET_KEY
+    engine_model_type: 16k_zh
+    slice_size: 6400
+tts:
+  type: tencent
+  tencent_tts:
+    app_id: $TENCENTTTS_APP_ID
+    secret_id: $TENCENTTTS_SECRET_ID
+    secret_key: $TENCENTTTS_SECRET_KEY
+    voice_type: 502001
+    codec: pcm

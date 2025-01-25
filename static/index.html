@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VoiceAgent Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+        }
+        #status {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebRTC Audio Demo</h1>
+    <div>
+        <button id="startButton">Start</button>
+        <button id="stopButton" disabled>Stop</button>
+    </div>
+    <div>
+        <h2>Remote Audio</h2>
+        <audio id="remoteAudio" autoplay controls></audio>
+    </div>
+    <div id="status">Status: Not connected</div>
+
+    <script>
+        let pc = null;
+        let stream = null;
+        let sessionURL = null;  // 保存服务端返回的会话 URL
+        const statusDiv = document.getElementById('status');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const remoteAudio = document.getElementById('remoteAudio');
+
+        async function start() {
+            try {
+                // 获取麦克风权限
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                statusDiv.textContent = 'Status: Got microphone access';
+
+                // 创建 PeerConnection
+                pc = new RTCPeerConnection();
+
+                // 添加音频轨道
+                stream.getTracks().forEach(track => {
+                    console.log("Adding track:", track.kind, track);
+                    // 使用 addTransceiver 显式设置方向为 sendrecv
+                    const transceiver = pc.addTransceiver(track, {
+                        direction: 'sendrecv',
+                        streams: [stream]
+                    });
+                    console.log("Added track, transceiver:", transceiver);
+                });
+
+                // 处理远端音频轨道
+                pc.ontrack = (event) => {
+                    console.log('Received remote track', event.track.kind);
+                    if (event.track.kind === 'audio') {
+                        // 将远端音频轨道添加到 audio 元素
+                        const [remoteStream] = event.streams;
+                        remoteAudio.srcObject = remoteStream;
+                    }
+                };
+
+                // 创建 offer
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+
+                // 发送 WHIP 请求
+                statusDiv.textContent = 'Status: Sending WHIP request';
+                const response = await fetch('/whip', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(offer)
+                });
+
+                if (response.status !== 201) {
+                    throw new Error('WHIP request failed');
+                }
+
+                // 保存会话 URL
+                sessionURL = response.headers.get('Location');
+                
+                // 设置远程描述
+                const answer = await response.json();
+                await pc.setRemoteDescription(answer);
+
+                statusDiv.textContent = 'Status: Connected';
+                startButton.disabled = true;
+                stopButton.disabled = false;
+
+                pc.oniceconnectionstatechange = () => {
+                    console.log("ICE Connection State:", pc.iceConnectionState);
+                    statusDiv.textContent = 'Status: ICE ' + pc.iceConnectionState;
+                };
+
+                pc.onconnectionstatechange = () => {
+                    console.log("Connection State:", pc.connectionState);
+                };
+
+                pc.onicegatheringstatechange = () => {
+                    console.log("ICE Gathering State:", pc.iceGatheringState);
+                };
+
+                pc.onicecandidate = event => {
+                    console.log("ICE candidate:", event.candidate);
+                };
+
+            } catch (e) {
+                statusDiv.textContent = 'Status: Error - ' + e.message;
+                console.error(e);
+                await stop();
+            }
+        }
+
+        async function stop() {
+            if (sessionURL) {
+                try {
+                    // 发送 DELETE 请求到会话 URL
+                    await fetch(sessionURL, {
+                        method: 'DELETE'
+                    });
+                } catch (e) {
+                    console.error('Failed to delete WHIP session:', e);
+                }
+                sessionURL = null;
+            }
+
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+
+            // 清理远端音频
+            remoteAudio.srcObject = null;
+
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            statusDiv.textContent = 'Status: Disconnected';
+        }
+
+        startButton.onclick = start;
+        stopButton.onclick = stop;
+    </script>
+</body>
+</html> 
