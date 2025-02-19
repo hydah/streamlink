@@ -221,6 +221,10 @@ func (b *BaseComponent) processLoop() {
 	}
 }
 
+func (b *BaseComponent) GetIgnoreTurn() bool {
+	return b.ignoreTurn
+}
+
 func (b *BaseComponent) SetIgnoreTurn(ignore bool) {
 	b.ignoreTurn = ignore
 }

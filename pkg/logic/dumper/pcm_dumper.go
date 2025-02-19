@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"voiceagent/pkg/logic/pipeline"
+	"streamlink/pkg/logic/pipeline"
 )
 
 // PCMDumper 结构体 (实现 Component 接口)

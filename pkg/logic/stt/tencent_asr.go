@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"streamlink/pkg/logic/pipeline"
 	"sync"
 	"time"
-	"voiceagent/pkg/logic/pipeline"
 
 	"github.com/tencentcloud/tencentcloud-speech-sdk-go/asr"
 	"github.com/tencentcloud/tencentcloud-speech-sdk-go/common"
@@ -164,9 +164,12 @@ func (t *TencentAsr) Process(packet pipeline.Packet) {
 	}
 }
 
+func (t *TencentAsr) SetInput() {
+	inChan := make(chan pipeline.Packet, 100)
+	t.SetInputChan(inChan)
+}
+
 func (t *TencentAsr) SetOutput(output func(pipeline.Packet)) {
-	outChan := make(chan pipeline.Packet, 100)
-	t.SetOutputChan(outChan)
 	go func() {
 		for packet := range t.GetOutputChan() {
 			if output != nil {

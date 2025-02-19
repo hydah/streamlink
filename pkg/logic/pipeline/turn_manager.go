@@ -108,7 +108,9 @@ func (tm *TurnManager) handleASRResult(text string, packet Packet) {
 		log.Printf("TurnManager: start new turn, seq: %d, cur text: %s", tm.GetCurTurnSeq(), tm.sentenceBuffer)
 
 		// 1. 先发送语义打断指令
-		tm.broadcastInterrupt(tm.GetCurTurnSeq(), InterruptTypeSemantic)
+		if !tm.GetIgnoreTurn() {
+			tm.broadcastInterrupt(tm.GetCurTurnSeq(), InterruptTypeSemantic)
+		}
 
 		// 2. 等待一小段时间让打断指令传播
 		// time.Sleep(100 * time.Millisecond)

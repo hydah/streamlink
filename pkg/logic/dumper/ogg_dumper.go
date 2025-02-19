@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"voiceagent/pkg/logic/codec"
-	"voiceagent/pkg/logic/pipeline"
+	"streamlink/pkg/logic/codec"
+	"streamlink/pkg/logic/pipeline"
 
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4/pkg/media/oggwriter"

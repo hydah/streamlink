@@ -3,9 +3,9 @@ package tts
 import (
 	"fmt"
 	"log"
+	"streamlink/pkg/logic/pipeline"
 	"sync"
 	"time"
-	"voiceagent/pkg/logic/pipeline"
 
 	"github.com/tencentcloud/tencentcloud-speech-sdk-go/common"
 	"github.com/tencentcloud/tencentcloud-speech-sdk-go/tts"
@@ -34,6 +34,7 @@ func NewTencentTTS(appID int64, secretID, secretKey string, voiceType int64, cod
 		secretKey:     secretKey,
 		voiceType:     voiceType,
 		codec:         codec,
+		metrics:       pipeline.TurnMetrics{},
 	}
 
 	// 设置处理函数
@@ -93,6 +94,9 @@ func (t *TencentTTS) processPacket(packet pipeline.Packet) {
 		// 发送处理后的数据
 		t.metrics.TurnEndTs = time.Now().UnixMilli()
 		previousMetrics := packet.TurnMetricStat
+		if previousMetrics == nil {
+			previousMetrics = make(map[string]pipeline.TurnMetrics)
+		}
 		previousMetrics[fmt.Sprintf("%s_%d", t.GetName(), t.GetSeq())] = t.metrics
 		packet.TurnMetricKeys = append(packet.TurnMetricKeys, fmt.Sprintf("%s_%d", t.GetName(), t.GetSeq()))
 		t.ForwardPacket(pipeline.Packet{
@@ -124,13 +128,19 @@ func (t *TencentTTS) Stop() {
 	}
 }
 
-// 为了向后兼容，保留这些方法
+// Process 为了向后兼容，保留这些方法
 func (t *TencentTTS) Process(packet pipeline.Packet) {
 	select {
 	case t.GetInputChan() <- packet:
 	default:
 		log.Printf("TencentTTS: input channel full, dropping packet")
 	}
+}
+
+// SetInput 设置输入通道
+func (t *TencentTTS) SetInput() {
+	inChan := make(chan pipeline.Packet, 100)
+	t.SetInputChan(inChan)
 }
 
 func (t *TencentTTS) SetOutput(output func(pipeline.Packet)) {

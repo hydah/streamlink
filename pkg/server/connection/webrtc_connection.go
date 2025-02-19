@@ -5,12 +5,12 @@ import (
 	"log"
 	"time"
 
-	"voiceagent/internal/config"
-	"voiceagent/pkg/logic/codec"
-	"voiceagent/pkg/logic/flux"
-	"voiceagent/pkg/logic/pipeline"
-	"voiceagent/pkg/logic/resampler"
-	"voiceagent/pkg/server/agent"
+	"streamlink/internal/config"
+	"streamlink/pkg/logic/codec"
+	"streamlink/pkg/logic/flux"
+	"streamlink/pkg/logic/pipeline"
+	"streamlink/pkg/logic/resampler"
+	"streamlink/pkg/server/agent"
 
 	"github.com/pion/ice/v4"
 	"github.com/pion/webrtc/v4"

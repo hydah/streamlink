@@ -3,12 +3,15 @@ server:
   udp_port: 8000
   public_ip:
     - 192.168.255.10
+  low_latency: true
+  interrupt: true
+  semantic_interrupt: false
 llm:
   type: openai
   openai:
     api_key: $SILICON_API_KEY
     base_url: https://api.siliconflow.cn/v1
-    model: Pro/deepseek-ai/DeepSeek-V3
+    model: Qwen/Qwen2.5-14B-Instruct
     temperature: 0.5
     max_tokens: 1000
 asr:

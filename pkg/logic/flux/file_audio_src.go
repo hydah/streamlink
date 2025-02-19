@@ -5,9 +5,10 @@ import (
 	"io"
 	"log"
 	"os"
+	"streamlink/internal/protocol/wav"
+	"streamlink/pkg/logic/codec"
+	"streamlink/pkg/logic/pipeline"
 	"time"
-	"voiceagent/internal/protocol/wav"
-	"voiceagent/pkg/logic/pipeline"
 )
 
 // FileAudioSource 结构体 (实现 Source 接口)
@@ -108,8 +109,15 @@ func (s *FileAudioSource) readLoop() {
 				}
 			}
 
+			// change pcmBuf to byte slice
+			byteBuf := make([]byte, len(pcmBuf)*2)
+			for i, v := range pcmBuf {
+				byteBuf[i*2] = byte(v)
+				byteBuf[i*2+1] = byte(v >> 8)
+			}
+
 			// 发送数据包
-			s.SendPacket(pcmBuf, s)
+			s.SendPacket(codec.NewRTPAudioPacket(byteBuf, uint32(s.seq)), s)
 
 			// 控制发送速度，模拟实时音频流
 			time.Sleep(20 * time.Millisecond)

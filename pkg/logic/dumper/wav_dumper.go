@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"voiceagent/internal/protocol/wav"
-	"voiceagent/pkg/logic/pipeline"
+	"streamlink/internal/protocol/wav"
+	"streamlink/pkg/logic/pipeline"
 )
 
 // WAVDumper 结构体 (实现 Component 接口)

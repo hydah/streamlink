@@ -1,7 +1,7 @@
 package flux
 
 import (
-	"voiceagent/pkg/logic/pipeline"
+	"streamlink/pkg/logic/pipeline"
 )
 
 // Source represents an audio source component

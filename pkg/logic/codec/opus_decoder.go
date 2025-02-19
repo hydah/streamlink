@@ -5,7 +5,7 @@ import (
 	"log"
 	"strings"
 
-	"voiceagent/pkg/logic/pipeline"
+	"streamlink/pkg/logic/pipeline"
 
 	"github.com/hraban/opus"
 )

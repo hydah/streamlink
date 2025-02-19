@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"streamlink/pkg/logic/pipeline"
 	"sync"
 	"time"
-	"voiceagent/pkg/logic/pipeline"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -43,8 +43,8 @@ func NewDeepSeek(apiKey string, baseURL string) *DeepSeek {
 		client:        client.Chat.Completions,
 		messages:      make([]openai.ChatCompletionMessageParamUnion, 0),
 		model:         "Qwen/Qwen2.5-14B-Instruct",
-		maxMessages:   10,   // 保留最近的10条消息
-		streaming:     true, // 默认启用流式处理
+		maxMessages:   10,    // 保留最近的10条消息
+		streaming:     false, // 默认启用流式处理
 	}
 
 	// 设置处理函数
@@ -227,8 +227,10 @@ func (d *DeepSeek) processTextNonStreaming(text string, packet pipeline.Packet) 
 
 	// 发送回复
 	previousMetrics := packet.TurnMetricStat
-	previousMetrics[fmt.Sprintf("%s_%d", d.GetName(), d.GetSeq())] = d.metrics
-	packet.TurnMetricKeys = append(packet.TurnMetricKeys, fmt.Sprintf("%s_%d", d.GetName(), d.GetSeq()))
+	if packet.TurnMetricStat != nil {
+		previousMetrics[fmt.Sprintf("%s_%d", d.GetName(), d.GetSeq())] = d.metrics
+		packet.TurnMetricKeys = append(packet.TurnMetricKeys, fmt.Sprintf("%s_%d", d.GetName(), d.GetSeq()))
+	}
 
 	d.ForwardPacket(pipeline.Packet{
 		Data:           assistantMessage,
@@ -262,9 +264,12 @@ func (d *DeepSeek) Process(packet pipeline.Packet) {
 	}
 }
 
+func (d *DeepSeek) SetInput() {
+	inChan := make(chan pipeline.Packet, 100)
+	d.SetInputChan(inChan)
+}
+
 func (d *DeepSeek) SetOutput(output func(pipeline.Packet)) {
-	outChan := make(chan pipeline.Packet, 100)
-	d.SetOutputChan(outChan)
 	go func() {
 		for packet := range d.GetOutputChan() {
 			if output != nil {

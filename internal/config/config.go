@@ -9,9 +9,12 @@ import (
 
 type Config struct {
 	Server struct {
-		HTTPPort int      `yaml:"http_port"`
-		UDPPort  int      `yaml:"udp_port"`
-		PublicIP []string `yaml:"public_ip"`
+		HTTPPort          int      `yaml:"http_port"`
+		UDPPort           int      `yaml:"udp_port"`
+		PublicIP          []string `yaml:"public_ip"`
+		LowLatency        bool     `yaml:"low_latency"`
+		Interrupt         bool     `yaml:"interrupt"`
+		SemanticInterrupt bool     `yaml:"semantic_interrupt"`
 	} `yaml:"server"`
 	LLM struct {
 		Type   string `yaml:"type"`

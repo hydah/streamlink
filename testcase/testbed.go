@@ -9,7 +9,8 @@ import (
 	"net/http"
 	"os"
 	"time"
-	"voiceagent/internal/protocol/wav"
+
+	"streamlink/internal/protocol/wav"
 
 	"github.com/hraban/opus"
 	"github.com/pion/webrtc/v4"

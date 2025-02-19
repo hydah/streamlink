@@ -1,4 +1,4 @@
-module voiceagent
+module streamlink
 
 go 1.23.4
 

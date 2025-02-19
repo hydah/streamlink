@@ -1,6 +1,6 @@
 package connection
 
-import "voiceagent/internal/config"
+import "streamlink/internal/config"
 
 // Connection 定义了所有类型连接的通用接口
 type Connection interface {

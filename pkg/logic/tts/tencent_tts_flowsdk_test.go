@@ -370,9 +370,17 @@ func TestFlowingSpeechSynthesizer_ErrorHandling(t *testing.T) {
 	listener := newMockListener()
 	synthesizer := NewFlowingSpeechSynthesizer(502001, credential, listener)
 
-	// 测试启动错误
+	// 启动合成器
 	err := synthesizer.Start()
-	assert.Error(t, err)
+	assert.NoError(t, err) // Start() 本身不会返回错误，因为错误会在使用时发生
+
+	// 尝试处理文本，这时应该会触发错误
+	err = synthesizer.Process("测试文本", "ACTION_SYNTHESIS")
+	assert.NoError(t, err) // Process() 本身也不会返回错误，因为它只是发送消息
+
+	// 等待一段时间以确保收到错误回调
+	time.Sleep(1 * time.Second)
+	assert.True(t, len(listener.errorReceived) > 0, "Should receive error callback")
 
 	// 测试无效的参数
 	synthesizer.SetVoiceType(-1)

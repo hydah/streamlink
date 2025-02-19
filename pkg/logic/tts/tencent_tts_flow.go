@@ -3,9 +3,9 @@ package tts
 import (
 	"fmt"
 	"log"
+	"streamlink/pkg/logic/pipeline"
 	"sync"
 	"time"
-	"voiceagent/pkg/logic/pipeline"
 )
 
 // TencentTTS2 实现 Component 接口
@@ -251,6 +251,7 @@ func (l *tts2SynthesisListener) OnSynthesisEnd() {
 func (l *tts2SynthesisListener) OnAudioResult(audioBytes []byte) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	// fmt.Printf("**%s** OnAudioResult: %d bytes", l.tts.GetName(), len(audioBytes))
 	l.tts.ForwardPacket(pipeline.Packet{
 		Data:    audioBytes,
 		Seq:     l.tts.GetSeq(),

@@ -1,59 +1,59 @@
-# StramLink: A Voice Agent with WebRTC
+# StreamLink: WebRTC 实时语音交互系统
 
-A real-time voice interaction system that combines WebRTC, Speech Recognition (ASR), Large Language Models (LLM), and Text-to-Speech (TTS) capabilities.
+StreamLink 是一个实时语音交互系统，它集成了 WebRTC、语音识别（ASR）、大语言模型（LLM）和语音合成（TTS）等功能，实现了流畅的人机语音对话体验。
 
-## Features
+## 主要特性
 
-- **WebRTC Integration**: Real-time audio streaming with WebRTC support
-- **Speech Recognition**: Tencent Cloud ASR integration for accurate speech-to-text conversion
-- **Language Model**: Integration with DeepSeek API for natural language processing
-- **Text-to-Speech**: Tencent Cloud TTS for high-quality speech synthesis
-- **Pipeline Architecture**: Flexible component-based pipeline for audio processing
-- **Audio Processing**:
-  - Sample rate conversion (resampling)
-  - Channel conversion (mono/stereo)
-  - Opus codec support
-  - PCM/WAV format support
+- **WebRTC 集成**：支持实时音频流传输
+- **语音识别**：集成腾讯云 ASR 服务，提供高精度的语音转文字功能
+- **语言模型**：集成 DeepSeek API，提供自然语言处理能力
+- **语音合成**：使用腾讯云 TTS 服务，实现高质量的文字转语音
+- **流水线架构**：基于组件的灵活流水线处理系统
+- **音频处理**：
+  - 采样率转换
+  - 声道转换（单声道/立体声）
+  - Opus 编解码支持
+  - PCM/WAV 格式支持
 
-## Architecture
+## 系统架构
 
-### Core Components
+### 核心组件
 
-1. **Pipeline System**
-   - Modular component architecture
-   - Asynchronous processing with channels
-   - Health monitoring and error handling
-   - Turn-based conversation management
+1. **流水线系统**
+   - 模块化组件架构
+   - 基于通道的异步处理
+   - 健康监控和错误处理
+   - 基于回合的对话管理
 
-2. **Audio Processing**
-   - File audio source/sink
-   - WebRTC audio handling
-   - Audio format conversion
-   - Audio dumping capabilities
+2. **音频处理**
+   - 文件音频源/接收器
+   - WebRTC 音频处理
+   - 音频格式转换
+   - 音频转储功能
 
-3. **Voice Processing**
-   - ASR: Speech-to-text conversion
-   - LLM: Natural language understanding and response generation
-   - TTS: Text-to-speech synthesis
+3. **语音处理**
+   - ASR：语音转文字
+   - LLM：自然语言理解和响应生成
+   - TTS：文字转语音
 
-### Component Interfaces
+### 组件接口
 
-- `Component`: Base interface for all pipeline components
-- `Source`: Audio input interface
-- `Sink`: Audio output interface
-- `AudioProcessor`: Audio processing interface
+- `Component`：所有流水线组件的基础接口
+- `Source`：音频输入接口
+- `Sink`：音频输出接口
+- `AudioProcessor`：音频处理接口
 
-## Setup
+## 环境配置
 
-### Prerequisites
+### 前置要求
 
-- Go 1.19 or later
-- Tencent Cloud account with ASR and TTS services enabled
-- DeepSeek API access
+- Go 1.19 或更高版本
+- 腾讯云账号（已开通 ASR 和 TTS 服务）
+- DeepSeek API 访问权限
 
-### Environment Variables
+### 环境变量
 
-Create a `.env` file with the following configurations:
+创建 `.env` 文件并配置以下内容：
 
 ```env
 SILICON_API_KEY='your-deepseek-api-key'
@@ -65,68 +65,77 @@ TENCENTASR_SECRET_ID="your-tencent-secret-id"
 TENCENTASR_SECRET_KEY="your-tencent-secret-key"
 ```
 
-### Installation
+### 安装步骤
 
-1. Clone the repository:
+1. 克隆仓库：
    ```bash
    git clone [repository-url]
    ```
 
-2. Install dependencies:
+2. 安装依赖：
    ```bash
+   # 安装 Go 依赖
    go mod download
+
+   
+   # 安装系统依赖(opus 编解码器)
+   # Debian/Ubuntu:
+   sudo apt-get install pkg-config libopus-dev libopusfile-dev
+
+   # Mac OS X:
+   brew install pkg-config opus opusfile
    ```
 
-3. Build the project:
+3. 构建项目：
    ```bash
    go build
    ```
 
-## Usage
+## 使用说明
 
-### Running Tests
+### 运行测试
 
 ```bash
 go test ./... -v
 ```
 
-### Audio Format Support
+### 支持的音频格式
 
-- Input formats: PCM, WAV, Opus
-- Output formats: PCM, WAV, Opus, MP3
-- Sample rates: 8kHz, 16kHz, 48kHz
-- Channels: Mono, Stereo
+- 输入格式：PCM、WAV、Opus
+- 输出格式：PCM、WAV、Opus、MP3
+- 采样率：8kHz、16kHz、48kHz
+- 声道：单声道、立体声
 
-### Example Usage
+### 使用示例
 
 ```go
-// Create a new voice agent
+// 创建语音代理实例
 agent := NewVoiceAgent(config, source, sink, processor)
 
-// Start the agent
+// 启动代理
 err := agent.Start()
 if err != nil {
     log.Fatal(err)
 }
 
-// Process audio
-// ... (audio processing)
+// 处理音频
+// ... (音频处理逻辑)
 
-// Stop the agent
+// 停止代理
 agent.Stop()
 ```
 
-## Development
+## 开发指南
 
-### Adding New Components
+### 添加新组件
 
-1. Implement the `Component` interface
-2. Add necessary audio processing logic
-3. Register the component in the pipeline
+1. 实现 `Component` 接口
+2. 添加必要的音频处理逻辑
+3. 在流水线中注册组件
 
-### Pipeline Configuration
+### 流水线配置
 
-The pipeline can be configured with different components:
+流水线可以配置不同的组件：
 
 ```go
 pipe := pipeline.NewPipelineWithSource(source)
@@ -135,15 +144,15 @@ components := flux.GenComponents(inputChain, outputChain,
 pipe.Connect(components...)
 ```
 
-## License
+## 许可证
 
-[License Type] - See LICENSE file for details
+详见 LICENSE 文件
 
-## Contributing
+## 贡献指南
 
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
+1. Fork 本仓库
+2. 创建特性分支
+3. 提交更改
+4. 推送到分支
+5. 创建 Pull Request
 

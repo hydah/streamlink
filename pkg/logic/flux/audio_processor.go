@@ -1,7 +1,7 @@
 package flux
 
 import (
-	"voiceagent/pkg/logic/pipeline"
+	"streamlink/pkg/logic/pipeline"
 )
 
 // ProcessingChain 表示一个处理链的结果

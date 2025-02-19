@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"streamlink/pkg/logic/codec"
+	"streamlink/pkg/logic/pipeline"
 	"time"
-	"voiceagent/pkg/logic/pipeline"
 
 	"github.com/zaf/resample"
 )
@@ -16,11 +17,13 @@ type Resampler struct {
 	*pipeline.BaseComponent
 	resampler     *resample.Resampler
 	buffer        *bytes.Buffer
+	inputBuffer   []int16 // 用于累积输入样本的缓冲区
 	channelsIn    int
 	channelsOut   int
 	sampleRateOut int
 	sampleRateIn  int
 	metrics       pipeline.TurnMetrics
+	minSamples    int // 重采样所需的最小样本数
 }
 
 func NewResampler(sampleRateIn, sampleRateOut, channelsIn, channelsOut int) (*Resampler, error) {
@@ -40,15 +43,21 @@ func NewResampler(sampleRateIn, sampleRateOut, channelsIn, channelsOut int) (*Re
 		return nil, err
 	}
 
+	// 计算最小样本数 - 基于输入采样率，确保有足够的数据进行重采样
+	// 这里使用输入采样率的 20ms 作为最小处理单位
+	minSamples := (sampleRateIn * channelsIn * 20) / 1000
+
 	name := fmt.Sprintf("Resampler_%dHz_%dCh->%dHz_%dCh", sampleRateIn, channelsIn, sampleRateOut, channelsOut)
 	r := &Resampler{
 		BaseComponent: pipeline.NewBaseComponent(name, 100),
 		resampler:     resampler,
 		buffer:        buffer,
+		inputBuffer:   make([]int16, 0),
 		channelsIn:    channelsIn,
 		channelsOut:   channelsOut,
 		sampleRateOut: sampleRateOut,
 		sampleRateIn:  sampleRateIn,
+		minSamples:    minSamples,
 	}
 
 	// 设置处理函数
@@ -73,6 +82,12 @@ func (r *Resampler) processPacket(packet pipeline.Packet) {
 	var processData []int16
 
 	switch data := packet.Data.(type) {
+	case codec.AudioPacket:
+		bytesData := data.Payload()
+		processData = make([]int16, len(bytesData)/2)
+		for i := 0; i < len(bytesData); i += 2 {
+			processData[i/2] = int16(bytesData[i]) | (int16(bytesData[i+1]) << 8)
+		}
 	case []int16:
 		processData = data
 	case []byte:
@@ -92,22 +107,36 @@ func (r *Resampler) processPacket(packet pipeline.Packet) {
 		return
 	}
 
-	if r.channelsIn == 1 {
-		log.Printf("**%s** Processing turn_seq=%d, data length: %d", r.GetName(), packet.TurnSeq, len(processData))
+	// 将新数据添加到输入缓冲区
+	r.inputBuffer = append(r.inputBuffer, processData...)
+
+	// 如果累积的样本数不够，等待更多数据
+	if len(r.inputBuffer) < r.minSamples {
+		return
 	}
-	r.buffer.Reset()
+
+	// 计算可以处理的样本数（必须是minSamples的整数倍）
+	processableSamples := (len(r.inputBuffer) / r.minSamples) * r.minSamples
+
+	// 获取要处理的数据
+	samplesForProcessing := r.inputBuffer[:processableSamples]
+
+	// 保存剩余的数据
+	remainingSamples := r.inputBuffer[processableSamples:]
+
+	// 处理输入缓冲区中的数据
+	var processedData []int16
 
 	// 如果是立体声转单声道，先做声道转换
-	var processedData []int16
 	if r.channelsIn > r.channelsOut {
 		// 立体声转单声道
-		processedData = make([]int16, len(processData)/2)
-		for i := 0; i < len(processData); i += r.channelsIn {
-			if i+1 >= len(processData) {
+		processedData = make([]int16, len(samplesForProcessing)/2)
+		for i := 0; i < len(samplesForProcessing); i += r.channelsIn {
+			if i+1 >= len(samplesForProcessing) {
 				break
 			}
-			left := int32(processData[i])
-			right := int32(processData[i+1])
+			left := int32(samplesForProcessing[i])
+			right := int32(samplesForProcessing[i+1])
 
 			leftF := float64(left) / 32768.0
 			rightF := float64(right) / 32768.0
@@ -122,14 +151,14 @@ func (r *Resampler) processPacket(packet pipeline.Packet) {
 			processedData[i/2] = int16(mixed)
 		}
 	} else if r.channelsIn < r.channelsOut {
-		processedData = make([]int16, len(processData)*2)
-		for i := 0; i < len(processData); i++ {
-			processedData[i*2] = processData[i]
-			processedData[i*2+1] = processData[i]
+		processedData = make([]int16, len(samplesForProcessing)*2)
+		for i := 0; i < len(samplesForProcessing); i++ {
+			processedData[i*2] = samplesForProcessing[i]
+			processedData[i*2+1] = samplesForProcessing[i]
 		}
 	} else {
-		processedData = make([]int16, len(processData))
-		copy(processedData, processData)
+		processedData = make([]int16, len(samplesForProcessing))
+		copy(processedData, samplesForProcessing)
 	}
 
 	// Convert []int16 to []byte
@@ -139,6 +168,7 @@ func (r *Resampler) processPacket(packet pipeline.Packet) {
 		audioBytes[i*2+1] = byte(sample >> 8)
 	}
 
+	r.buffer.Reset()
 	// 写入数据
 	_, err := r.resampler.Write(audioBytes)
 	if err != nil {
@@ -162,6 +192,10 @@ func (r *Resampler) processPacket(packet pipeline.Packet) {
 	for i := 0; i < len(resampledBytes)/2; i++ {
 		currentData[i] = int16(resampledBytes[i*2]) | (int16(resampledBytes[i*2+1]) << 8)
 	}
+
+	// 更新输入缓冲区为剩余的样本
+	r.inputBuffer = make([]int16, len(remainingSamples))
+	copy(r.inputBuffer, remainingSamples)
 
 	// 发送重采样后的数据
 	r.metrics.TurnEndTs = time.Now().UnixMilli()

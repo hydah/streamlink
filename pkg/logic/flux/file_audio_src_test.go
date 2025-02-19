@@ -6,10 +6,10 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"streamlink/pkg/logic/dumper"
+	"streamlink/pkg/logic/resampler"
 	"testing"
 	"time"
-	"voiceagent/pkg/logic/codec"
-	"voiceagent/pkg/logic/dumper"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -25,7 +25,7 @@ func TestFileAudioSource_WithOpusDecoding(t *testing.T) {
 	projectRoot := getProjectRoot()
 
 	// 使用项目相对路径访问测试音频文件
-	inputFile := path.Join(projectRoot, "testcase", "testdata", "libai.ogg")
+	inputFile := path.Join(projectRoot, "testcase", "testdata", "libai.wav")
 	if _, err := os.Stat(inputFile); os.IsNotExist(err) {
 		t.Skipf("Test input file not found: %s", inputFile)
 	}
@@ -39,9 +39,8 @@ func TestFileAudioSource_WithOpusDecoding(t *testing.T) {
 	// 创建 FileAudioSource (48kHz 采样率)
 	source := NewFileAudioSource(inputFile, 48000)
 	assert.NotNil(t, source)
-
-	// 创建 Opus 解码器 (48kHz, 双声道)
-	opusDecoder, err := codec.NewOpusDecoder(48000, 2)
+	// resampler
+	resampler, err := resampler.NewResampler(48000, 16000, 2, 1)
 	assert.NoError(t, err)
 
 	// 创建 PCM 转储器
@@ -50,11 +49,11 @@ func TestFileAudioSource_WithOpusDecoding(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 设置处理链
-	source.Connect(opusDecoder).Connect(pcmDumper)
+	source.Connect(resampler).Connect(pcmDumper)
 	pcmDumper.SetOutput(nil)
 
 	// 启动所有组件
-	opusDecoder.Start()
+	resampler.Start()
 	pcmDumper.Start()
 	source.Start()
 
@@ -63,7 +62,7 @@ func TestFileAudioSource_WithOpusDecoding(t *testing.T) {
 
 	// 停止所有组件
 	source.Stop()
-	opusDecoder.Stop()
+	resampler.Stop()
 	pcmDumper.Stop()
 
 	// 验证输出文件是否存在且不为空

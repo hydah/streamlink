@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"voiceagent/internal/config"
-	"voiceagent/pkg/server"
+	"streamlink/internal/config"
+	"streamlink/pkg/server"
 
 	"github.com/gin-gonic/gin"
 )

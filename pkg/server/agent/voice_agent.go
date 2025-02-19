@@ -5,12 +5,12 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"voiceagent/internal/config"
-	"voiceagent/pkg/logic/flux"
-	"voiceagent/pkg/logic/llm"
-	"voiceagent/pkg/logic/pipeline"
-	"voiceagent/pkg/logic/stt"
-	"voiceagent/pkg/logic/tts"
+	"streamlink/internal/config"
+	"streamlink/pkg/logic/flux"
+	"streamlink/pkg/logic/llm"
+	"streamlink/pkg/logic/pipeline"
+	"streamlink/pkg/logic/stt"
+	"streamlink/pkg/logic/tts"
 )
 
 // VoiceAgent 处理语音对话的代理
@@ -21,7 +21,7 @@ type VoiceAgent struct {
 	pipeline    *pipeline.Pipeline
 	asr         *stt.TencentAsr
 	llm         *llm.DeepSeek
-	tts         *tts.TencentTTS2
+	tts         interface{ pipeline.Component }
 	stopCh      chan struct{}
 	processor   flux.AudioProcessor
 	turnManager *pipeline.TurnManager
@@ -68,6 +68,9 @@ func NewVoiceAgent(config *config.Config, source flux.Source, sink flux.Sink, pr
 		apiKey,
 		baseURL,
 	)
+	llmInstance.SetModel(config.LLM.OpenAI.Model)
+	// Configure LLM streaming based on low latency mode
+	llmInstance.SetStreaming(config.Server.LowLatency)
 
 	// 创建 TTS 实例
 	appIDStr = config.TTS.TencentTTS.AppID
@@ -87,13 +90,25 @@ func NewVoiceAgent(config *config.Config, source flux.Source, sink flux.Sink, pr
 	if secretKey != "" && secretKey[0] == '$' {
 		secretKey = os.Getenv(secretKey[1:])
 	}
-	tts := tts.NewTencentTTS2(
-		appID,
-		secretID,
-		secretKey,
-		config.TTS.TencentTTS.VoiceType,
-		config.TTS.TencentTTS.Codec,
-	)
+
+	var ttsInstance interface{ pipeline.Component }
+	if config.Server.LowLatency {
+		ttsInstance = tts.NewTencentTTS2(
+			appID,
+			secretID,
+			secretKey,
+			config.TTS.TencentTTS.VoiceType,
+			config.TTS.TencentTTS.Codec,
+		)
+	} else {
+		ttsInstance = tts.NewTencentTTS(
+			appID,
+			secretID,
+			secretKey,
+			config.TTS.TencentTTS.VoiceType,
+			config.TTS.TencentTTS.Codec,
+		)
+	}
 
 	return &VoiceAgent{
 		config:    config,
@@ -101,7 +116,7 @@ func NewVoiceAgent(config *config.Config, source flux.Source, sink flux.Sink, pr
 		sink:      sink,
 		asr:       asr,
 		llm:       llmInstance,
-		tts:       tts,
+		tts:       ttsInstance,
 		stopCh:    make(chan struct{}),
 		processor: processor,
 	}
@@ -123,7 +138,7 @@ func (v *VoiceAgent) Start() error {
 
 	// 创建 TurnManager
 	v.turnManager = pipeline.NewTurnManager(pipeline.DefaultTurnManagerConfig())
-	v.turnManager.SetIgnoreTurn(true)
+	v.turnManager.SetIgnoreTurn(!v.config.Server.Interrupt)
 
 	// 获取基础组件
 	components := flux.GenComponents(v.processor.ProcessInput(v.source),

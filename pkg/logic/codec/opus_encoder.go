@@ -3,8 +3,8 @@ package codec
 import (
 	"fmt"
 	"log"
+	"streamlink/pkg/logic/pipeline"
 	"time"
-	"voiceagent/pkg/logic/pipeline"
 
 	"github.com/hraban/opus"
 )
