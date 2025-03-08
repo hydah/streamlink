@@ -2,3 +2,4 @@
 testdump/
 pcm_dumps/
 .env.test
+logs/

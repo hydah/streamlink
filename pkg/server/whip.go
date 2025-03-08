@@ -2,8 +2,8 @@ package server
 
 import (
 	"fmt"
-	"log"
 	"net/http"
+	"streamlink/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pion/webrtc/v4"
@@ -18,7 +18,7 @@ func (s *WHIPServer) HandleWHIP(c *gin.Context) {
 		return
 	}
 
-	log.Printf("offer: %v", offer)
+	logger.Info("offer: %v", offer)
 
 	localDescription, sessionID, err := s.HandleNewConnection(&offer)
 	if err != nil {
@@ -26,7 +26,7 @@ func (s *WHIPServer) HandleWHIP(c *gin.Context) {
 		return
 	}
 
-	log.Printf("sessionID: %s", sessionID)
+	logger.Info("sessionID: %s", sessionID)
 
 	// 返回 SDP answer
 	c.Header("Content-Type", "application/sdp")

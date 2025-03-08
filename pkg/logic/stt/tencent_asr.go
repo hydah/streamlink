@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/pipeline"
 	"sync"
 	"time"
@@ -186,11 +187,11 @@ type asrListener struct {
 }
 
 func (l *asrListener) OnRecognitionStart(response *asr.SpeechRecognitionResponse) {
-	log.Printf("**%s** Recognition started: voice_id=%s", l.asr.GetName(), response.VoiceID)
+	logger.Info("**%s** Recognition started: voice_id=%s", l.asr.GetName(), response.VoiceID)
 }
 
 func (l *asrListener) OnSentenceBegin(response *asr.SpeechRecognitionResponse) {
-	log.Printf("**%s** Sentence begin: voice_id=%s", l.asr.GetName(), response.VoiceID)
+	logger.Info("**%s** Sentence begin: voice_id=%s", l.asr.GetName(), response.VoiceID)
 	l.asr.metrics.TurnStartTs = time.Now().UnixMilli()
 	l.asr.metrics.TurnEndTs = 0
 }
@@ -219,7 +220,7 @@ func (l *asrListener) OnRecognitionResultChange(response *asr.SpeechRecognitionR
 
 func (l *asrListener) OnSentenceEnd(response *asr.SpeechRecognitionResponse) {
 	resultText := fmt.Sprintf("%v", response.Result.VoiceTextStr)
-	log.Printf("**%s** Sentence end: voice_id=%s, text=%s", l.asr.GetName(), response.VoiceID, resultText)
+	logger.Info("**%s** Sentence end: voice_id=%s, text=%s", l.asr.GetName(), response.VoiceID, resultText)
 
 	l.asr.metrics.TurnEndTs = time.Now().UnixMilli()
 
@@ -238,11 +239,11 @@ func (l *asrListener) OnSentenceEnd(response *asr.SpeechRecognitionResponse) {
 }
 
 func (l *asrListener) OnRecognitionComplete(response *asr.SpeechRecognitionResponse) {
-	log.Printf("**%s** Recognition complete: voice_id=%s", l.asr.GetName(), response.VoiceID)
+	logger.Info("**%s** Recognition complete: voice_id=%s", l.asr.GetName(), response.VoiceID)
 }
 
 func (l *asrListener) OnFail(response *asr.SpeechRecognitionResponse, err error) {
-	log.Printf("**%s** Recognition failed: voice_id=%s, error=%v", l.asr.GetName(), response.VoiceID, err)
+	logger.Error("**%s** Recognition failed: voice_id=%s, error=%v", l.asr.GetName(), response.VoiceID, err)
 	l.asr.UpdateErrorStatus(err)
 }
 

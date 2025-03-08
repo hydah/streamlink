@@ -3,7 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
-	"log"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/pipeline"
 	"sync"
 	"time"
@@ -29,6 +29,9 @@ type DeepSeek struct {
 	streaming   bool
 	mu          sync.Mutex
 	metrics     pipeline.TurnMetrics
+	// 自定义指标
+	firstTokenLatencyMs int64 // 首token延迟(毫秒)
+	totalLatencyMs      int64 // 总延迟(毫秒)
 }
 
 // NewDeepSeek 创建一个新的 DeepSeek 实例
@@ -55,7 +58,7 @@ func NewDeepSeek(apiKey string, baseURL string) *DeepSeek {
 }
 
 func (d *DeepSeek) handleInterrupt(packet pipeline.Packet) {
-	// log.Printf("**%s** Received interrupt command for turn %d", d.GetName(), packet.TurnSeq)
+	logger.Info("**%s** Received interrupt command for turn %d", d.GetName(), packet.TurnSeq)
 	d.SetCurTurnSeq(packet.TurnSeq)
 
 	d.ForwardPacket(packet)
@@ -80,7 +83,7 @@ func (d *DeepSeek) ProcessText(text string) string {
 	)
 
 	if err != nil {
-		log.Printf("Error creating chat completion: %v", err)
+		logger.Error("Error creating chat completion: %v", err)
 		return ""
 	}
 
@@ -101,13 +104,17 @@ func (d *DeepSeek) ProcessText(text string) string {
 func (d *DeepSeek) processPacket(packet pipeline.Packet) {
 	switch data := packet.Data.(type) {
 	case string:
+		d.mu.Lock()
 		d.metrics.TurnStartTs = time.Now().UnixMilli()
 		d.metrics.TurnEndTs = 0
+		d.firstTokenLatencyMs = 0
+		d.totalLatencyMs = 0
+		d.mu.Unlock()
 
-		log.Printf("**%s** Process turn_seq=%d, cur_turn_seq=%d, text: %s", d.GetName(), packet.TurnSeq, d.GetCurTurnSeq(), data)
+		logger.Info("**%s** Process turn_seq=%d, cur_turn_seq=%d, text: %s", d.GetName(), packet.TurnSeq, d.GetCurTurnSeq(), data)
 
 		if d.streaming {
-			d.processTextStreaming(data, packet)
+			go d.processTextStreaming(data, packet)
 		} else {
 			d.processTextNonStreaming(data, packet)
 		}
@@ -125,64 +132,114 @@ func (d *DeepSeek) processTextStreaming(text string, packet pipeline.Packet) {
 	}
 	// 添加用户消息
 	d.messages = append(d.messages, openai.UserMessage(text))
+	messagesCopy := make([]openai.ChatCompletionMessageParamUnion, len(d.messages))
+	copy(messagesCopy, d.messages)
+	modelCopy := d.model
 	d.mu.Unlock()
 
-	// 创建流式聊天完成请求
-	stream := d.client.NewStreaming(
-		context.Background(),
-		openai.ChatCompletionNewParams{
-			Messages: openai.F(d.messages),
-			Model:    openai.F(d.model),
-		},
-	)
-	defer stream.Close()
+	// 记录开始时间
+	startTime := time.Now()
+	var firstTokenTime time.Time
 
-	// 使用累加器收集完整响应
-	acc := openai.ChatCompletionAccumulator{}
-	var fullResponse string
-	var chunkCount int
+	// 在单独的goroutine中处理流式响应，避免阻塞processLoop
+	go func() {
+		// 创建上下文，使其可以被取消
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-	// 处理流式响应
-	for stream.Next() {
-		chunk := stream.Current()
-		acc.AddChunk(chunk)
-		chunkCount++
+		// 创建流式聊天完成请求
+		stream := d.client.NewStreaming(
+			ctx,
+			openai.ChatCompletionNewParams{
+				Messages: openai.F(messagesCopy),
+				Model:    openai.F(modelCopy),
+			},
+		)
+		defer stream.Close()
 
-		// 发送内容更新
-		if content, ok := acc.JustFinishedContent(); ok {
-			d.ForwardPacket(pipeline.Packet{
-				Data:    content,
-				Seq:     d.GetSeq(),
-				TurnSeq: d.GetCurTurnSeq(),
-			})
-			fullResponse += content
+		// 使用累加器收集完整响应
+		acc := openai.ChatCompletionAccumulator{}
+		var fullResponse string
+		var chunkCount int
+		isFirstToken := true
+		padding := ""
+
+		// 处理流式响应
+		for stream.Next() {
+			// 记录首个token的时间
+			if isFirstToken {
+				firstTokenTime = time.Now()
+				firstTokenLatency := firstTokenTime.Sub(startTime)
+				d.mu.Lock()
+				d.firstTokenLatencyMs = firstTokenLatency.Milliseconds()
+				d.mu.Unlock()
+				logger.Info("[TurnSeq: %d] **%s** First token latency: %v", packet.TurnSeq, d.GetName(), firstTokenLatency)
+				isFirstToken = false
+				padding = "。"
+			}
+
+			// 检查当前turn sequence是否已经改变，如果改变则停止处理
+			if packet.TurnSeq < d.GetCurTurnSeq() {
+				logger.Info("**%s** Turn sequence changed from %d to %d, stopping stream", d.GetName(), packet.TurnSeq, d.GetCurTurnSeq())
+				return
+			}
+
+			chunk := stream.Current()
+			acc.AddChunk(chunk)
+			chunkCount++
+
+			// 发送内容更新
+			if content, ok := acc.JustFinishedContent(); ok {
+				logger.Debug("**%s** Streaming content: %s", d.GetName(), content)
+				d.ForwardPacket(pipeline.Packet{
+					Data:    content,
+					Seq:     d.GetSeq(),
+					TurnSeq: packet.TurnSeq,
+				})
+				fullResponse += content
+			}
+
+			// 如果当前块有内容，也发送
+			if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
+				logger.Debug("**%s** Streaming content: %s", d.GetName(), chunk.Choices[0].Delta.Content+padding)
+				d.ForwardPacket(pipeline.Packet{
+					Data:    chunk.Choices[0].Delta.Content + padding,
+					Seq:     d.GetSeq(),
+					TurnSeq: packet.TurnSeq,
+				})
+				fullResponse += chunk.Choices[0].Delta.Content
+				padding = ""
+			}
 		}
 
-		// 如果当前块有内容，也发送
-		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
-			d.ForwardPacket(pipeline.Packet{
-				Data:    chunk.Choices[0].Delta.Content,
-				Seq:     d.GetSeq(),
-				TurnSeq: d.GetCurTurnSeq(),
-			})
-			fullResponse += chunk.Choices[0].Delta.Content
+		// 计算总耗时
+		totalDuration := time.Since(startTime)
+		d.mu.Lock()
+		d.totalLatencyMs = totalDuration.Milliseconds()
+		d.metrics.TurnEndTs = time.Now().UnixMilli()
+		d.mu.Unlock()
+
+		logger.Info("[TurnSeq: %d] **%s** Total streaming duration: %v (first token: %v)",
+			packet.TurnSeq, d.GetName(), totalDuration,
+			time.Duration(d.firstTokenLatencyMs)*time.Millisecond)
+
+		if err := stream.Err(); err != nil {
+			logger.Error("Error in stream: %v", err)
+			d.UpdateErrorStatus(err)
+			return
 		}
-	}
 
-	if err := stream.Err(); err != nil {
-		log.Printf("Error in stream: %v", err)
-		d.UpdateErrorStatus(err)
-		return
-	}
+		d.mu.Lock()
+		// 如果添加助手回复会超过限制，先移除最早的消息
+		if len(d.messages) >= d.maxMessages {
+			d.messages = d.messages[1:]
+		}
+		// 将完整的回复添加到消息历史
+		d.messages = append(d.messages, openai.AssistantMessage(fullResponse))
+		d.mu.Unlock()
+	}()
 
-	d.mu.Lock()
-	// 如果添加助手回复会超过限制，先移除最早的消息
-	if len(d.messages) >= d.maxMessages {
-		d.messages = d.messages[1:]
-	}
-	// 将完整的回复添加到消息历史
-	d.messages = append(d.messages, openai.AssistantMessage(fullResponse))
-	d.mu.Unlock()
+	// 立即返回，不阻塞processLoop
 }
 
 // processTextNonStreaming 处理非流式文本请求
@@ -206,7 +263,7 @@ func (d *DeepSeek) processTextNonStreaming(text string, packet pipeline.Packet) 
 	)
 
 	if err != nil {
-		log.Printf("Error creating chat completion: %v", err)
+		logger.Error("Error creating chat completion: %v", err)
 		d.UpdateErrorStatus(err)
 		return
 	}
@@ -260,7 +317,7 @@ func (d *DeepSeek) Process(packet pipeline.Packet) {
 	select {
 	case d.GetInputChan() <- packet:
 	default:
-		log.Printf("DeepSeek: input channel full, dropping packet")
+		logger.Error("DeepSeek: input channel full, dropping packet")
 	}
 }
 

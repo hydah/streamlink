@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/codec"
 	"streamlink/pkg/logic/pipeline"
 	"time"
@@ -76,6 +76,11 @@ func (r *Resampler) handleInterrupt(packet pipeline.Packet) {
 
 // processPacket 处理输入的数据包
 func (r *Resampler) processPacket(packet pipeline.Packet) {
+	if packet.TurnSeq < r.GetCurTurnSeq() {
+		logger.Info("**%s** Skip turn_seq=%d , text: %s", r.GetName(), packet.TurnSeq, packet.Data)
+		r.inputBuffer = make([]int16, 0)
+		return
+	}
 	r.metrics.TurnStartTs = time.Now().UnixMilli()
 	r.metrics.TurnEndTs = 0
 
@@ -102,7 +107,7 @@ func (r *Resampler) processPacket(packet pipeline.Packet) {
 	}
 
 	if len(processData) == 0 {
-		log.Printf("**%s** Warning: received empty input data", r.GetName())
+		logger.Warn("**%s** Warning: received empty input data", r.GetName())
 		r.UpdateErrorStatus(fmt.Errorf("received empty input data"))
 		return
 	}
@@ -172,7 +177,7 @@ func (r *Resampler) processPacket(packet pipeline.Packet) {
 	// 写入数据
 	_, err := r.resampler.Write(audioBytes)
 	if err != nil {
-		log.Printf("**%s** Resampling failed: %v", r.GetName(), err)
+		logger.Error("**%s** Resampling failed: %v", r.GetName(), err)
 		r.UpdateErrorStatus(err)
 		return
 	}
@@ -181,7 +186,7 @@ func (r *Resampler) processPacket(packet pipeline.Packet) {
 	resampledBytes := make([]byte, r.buffer.Len())
 	n, err := r.buffer.Read(resampledBytes)
 	if err != nil && err != io.EOF {
-		log.Printf("**%s** Failed to read resampled data: %v", r.GetName(), err)
+		logger.Error("**%s** Failed to read resampled data: %v", r.GetName(), err)
 		r.UpdateErrorStatus(err)
 		return
 	}
@@ -230,7 +235,7 @@ func (r *Resampler) Process(packet pipeline.Packet) {
 	select {
 	case r.GetInputChan() <- packet:
 	default:
-		log.Printf("**%s** Input channel full, dropping packet", r.GetName())
+		logger.Error("**%s** Input channel full, dropping packet", r.GetName())
 	}
 }
 

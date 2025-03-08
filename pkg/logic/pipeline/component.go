@@ -2,7 +2,7 @@ package pipeline
 
 import (
 	"fmt"
-	"log"
+	"streamlink/pkg/logger"
 	"sync"
 	"time"
 )
@@ -114,14 +114,16 @@ type Component interface {
 
 // BaseComponent 提供了基础的 channel 处理逻辑
 type BaseComponent struct {
-	inputChan  chan Packet
-	outputChan chan Packet
-	stopCh     chan struct{}
-	process    func(Packet) // 实际的处理函数
-	name       string       // 组件名称
-	curTurnSeq int
-	seq        int
-	ignoreTurn bool
+	inputChan    chan Packet
+	outputChan   chan Packet
+	stopCh       chan struct{}
+	process      func(Packet) // 实际的处理函数
+	name         string       // 组件名称
+	curTurnSeq   int
+	turnStartTs  int64
+	seq          int
+	ignoreTurn   bool
+	useInterrupt bool
 
 	// 健康监控相关字段
 	health     ComponentHealth
@@ -147,6 +149,7 @@ func NewBaseComponent(name string, bufferSize int) *BaseComponent {
 		curTurnSeq:      0,
 		seq:             0,
 		ignoreTurn:      false,
+		useInterrupt:    false,
 		commandHandlers: make(map[PacketCommand]func(Packet)),
 	}
 }
@@ -207,9 +210,12 @@ func (b *BaseComponent) processLoop() {
 				continue
 			}
 
+			// if b.GetName() != "Resampler_48000Hz_2Ch->16000Hz_1Ch" && b.GetName() != "TencentASR" && b.GetName() != "OpusDecoder" {
+			// 	log.Printf("**%s** Process packet. turn_seq=%d", b.GetName(), packet.TurnSeq)
+			// }
 			// handle data
 			if !b.ignoreTurn && packet.TurnSeq < b.curTurnSeq {
-				log.Printf("**%s** Drop packet. packet turn_seq=%d, cur_turn_seq=%d", b.GetName(), packet.TurnSeq, b.curTurnSeq)
+				logger.Error("**%s** Drop packet. packet turn_seq=%d, cur_turn_seq=%d", b.GetName(), packet.TurnSeq, b.curTurnSeq)
 				// drop current packet
 				b.UpdateDroppedStatus()
 				continue
@@ -219,6 +225,14 @@ func (b *BaseComponent) processLoop() {
 			}
 		}
 	}
+}
+
+func (b *BaseComponent) GetUseInterrupt() bool {
+	return b.useInterrupt
+}
+
+func (b *BaseComponent) SetUseInterrupt(useInterrupt bool) {
+	b.useInterrupt = useInterrupt
 }
 
 func (b *BaseComponent) GetIgnoreTurn() bool {
@@ -248,6 +262,14 @@ func (b *BaseComponent) GetCurTurnSeq() int {
 }
 func (b *BaseComponent) IncrTurnSeq() {
 	b.curTurnSeq++
+}
+
+func (b *BaseComponent) SetTurnStartTs(turnStartTs int64) {
+	b.turnStartTs = turnStartTs
+}
+
+func (b *BaseComponent) GetTurnStartTs() int64 {
+	return b.turnStartTs
 }
 
 func (b *BaseComponent) SetCurTurnSeq(turnSeq int) {
@@ -284,12 +306,15 @@ func (b *BaseComponent) UpdateHealth(health ComponentHealth) {
 
 // ForwardPacket 转发数据包到输出通道
 func (b *BaseComponent) ForwardPacket(packet Packet) {
+	// if b.GetName() != "Resampler_48000Hz_2Ch->16000Hz_1Ch" {
+	// 	log.Printf("**%s** Forward packet. turn_seq=%d", b.GetName(), packet.TurnSeq)
+	// }
 	outChan := b.GetOutputChan()
 	if outChan != nil {
 		select {
 		case outChan <- packet:
 		default:
-			log.Printf("%s: output channel full, dropping packet", b.name)
+			logger.Error("%s: output channel full, dropping packet", b.name)
 			b.UpdateDroppedStatus()
 		}
 	}
@@ -307,7 +332,7 @@ func (b *BaseComponent) SendPacket(data interface{}, src interface{}) {
 			TurnSeq: b.curTurnSeq,
 		}:
 		default:
-			log.Printf("%s: output channel full, dropping packet", b.name)
+			logger.Error("%s: output channel full, dropping packet", b.name)
 			b.UpdateDroppedStatus()
 		}
 	}
@@ -346,7 +371,7 @@ func (b *BaseComponent) UpdateDroppedStatus() {
 // HandleUnsupportedData 处理不支持的数据类型
 func (b *BaseComponent) HandleUnsupportedData(data interface{}) {
 	err := fmt.Errorf("%s: unsupported data type: %T", b.name, data)
-	log.Printf("%v", err)
+	logger.Error("%v", err)
 	b.UpdateErrorStatus(err)
 }
 
@@ -363,7 +388,7 @@ func (b *BaseComponent) GetStopCh() chan struct{} {
 // Connect 连接到下一个组件，返回下一个组件以支持链式调用
 func (b *BaseComponent) Connect(next Component) Component {
 	// 直接将当前组件的输出通道设置为下一个组件的输入通道
-	log.Printf("Connect component %s[out cap: %d] to %s",
+	logger.Info("Connect component %s[out cap: %d] to %s",
 		b.GetName(),
 		cap(b.GetOutputChan()),
 		next.(interface{ GetName() string }).GetName(),
@@ -396,7 +421,7 @@ func NewComponentAdapter(component Component, bufferSize int) *ComponentAdapter 
 			select {
 			case adapter.outputChan <- p:
 			default:
-				log.Printf("ComponentAdapter: output channel full, dropping packet")
+				logger.Error("ComponentAdapter: output channel full, dropping packet")
 			}
 		}
 	})
@@ -426,7 +451,7 @@ func (a *ComponentAdapter) Process(packet Packet) {
 	select {
 	case a.inputChan <- packet:
 	default:
-		log.Printf("ComponentAdapter: input channel full, dropping packet")
+		logger.Error("ComponentAdapter: input channel full, dropping packet")
 	}
 }
 

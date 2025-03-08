@@ -2,7 +2,7 @@ package pipeline
 
 import (
 	"fmt"
-	"log"
+	"streamlink/pkg/logger"
 	"strings"
 	"sync"
 	"time"
@@ -55,7 +55,7 @@ func (p *Pipeline) Process(data interface{}) {
 	select {
 	case p.components[0].GetInputChan() <- packet:
 	default:
-		log.Printf("Pipeline: first component's input channel full, dropping packet")
+		logger.Error("Pipeline: first component's input channel full, dropping packet")
 	}
 }
 
@@ -78,7 +78,7 @@ func (p *Pipeline) SendInterrupt(turnSeq int) {
 	select {
 	case p.components[0].GetInputChan() <- packet:
 	default:
-		log.Printf("Pipeline: first component's input channel full, dropping interrupt packet")
+		logger.Error("Pipeline: first component's input channel full, dropping interrupt packet")
 	}
 }
 
@@ -110,7 +110,7 @@ func (p *Pipeline) Start() error {
 			return fmt.Errorf("failed to start component %s: %v",
 				comp.(interface{ GetName() string }).GetName(), err)
 		}
-		log.Printf("Start component: %s", comp.(interface{ GetName() string }).GetName())
+		logger.Info("Start component: %s", comp.(interface{ GetName() string }).GetName())
 	}
 
 	// 启动健康检查
@@ -125,7 +125,7 @@ func (p *Pipeline) Connect(components ...Component) error {
 		return fmt.Errorf("no components to connect")
 	}
 
-	log.Printf("Initializing pipeline with %d components", len(components))
+	logger.Info("Initializing pipeline with %d components", len(components))
 	p.components = components
 
 	// 连接音频源到第一个组件
@@ -220,7 +220,7 @@ func (p *Pipeline) checkComponentsHealth() {
 	}
 
 	// 输出单条日志
-	log.Printf("Pipeline Stats:\n%s", strings.Join(logParts, "\n\n"))
+	logger.Info("Pipeline Stats:\n%s", strings.Join(logParts, "\n\n"))
 }
 
 // GetComponentHealth 获取指定组件的健康状态

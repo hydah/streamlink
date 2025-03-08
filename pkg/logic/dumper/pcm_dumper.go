@@ -2,9 +2,9 @@ package dumper
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/pipeline"
 )
 
@@ -48,7 +48,7 @@ func NewPCMDumper(fileName string) (*PCMDumper, error) {
 }
 
 func (d *PCMDumper) handleInterrupt(packet pipeline.Packet) {
-	log.Printf("**%s** Received interrupt command for turn %d", d.GetName(), packet.TurnSeq)
+	logger.Info("**%s** Received interrupt command for turn %d", d.GetName(), packet.TurnSeq)
 	d.SetCurTurnSeq(packet.TurnSeq)
 
 	d.ForwardPacket(packet)
@@ -69,7 +69,7 @@ func (d *PCMDumper) processPacket(packet pipeline.Packet) {
 			pcmBytes[i*2+1] = byte(sample >> 8)
 		}
 		if _, err := d.file.Write(pcmBytes); err != nil {
-			log.Printf("**%s** Failed to write PCM data: %v", d.GetName(), err)
+			logger.Error("**%s** Failed to write PCM data: %v", d.GetName(), err)
 			d.UpdateErrorStatus(err)
 		}
 
@@ -97,7 +97,7 @@ func (d *PCMDumper) Process(packet pipeline.Packet) {
 	select {
 	case d.GetInputChan() <- packet:
 	default:
-		fmt.Printf("PCMDumper: input channel full, dropping packet\n")
+		logger.Error("PCMDumper: input channel full, dropping packet")
 	}
 }
 

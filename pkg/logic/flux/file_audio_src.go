@@ -3,9 +3,9 @@ package flux
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"streamlink/internal/protocol/wav"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/codec"
 	"streamlink/pkg/logic/pipeline"
 	"time"
@@ -44,7 +44,7 @@ func (s *FileAudioSource) Start() error {
 	if s.isRunning {
 		return nil
 	}
-	log.Printf("Start component: %s", s.GetName())
+	logger.Info("Start component: %s", s.GetName())
 
 	// 打开 WAV 文件
 	file, err := os.Open(s.filePath)
@@ -97,7 +97,7 @@ func (s *FileAudioSource) readLoop() {
 			// 读取 PCM 数据
 			n, err := s.reader.ReadSamples(pcmBuf)
 			if err != nil && err != io.EOF {
-				log.Printf("**%s** Failed to read WAV data: %v", s.GetName(), err)
+				logger.Error("**%s** Failed to read WAV data: %v", s.GetName(), err)
 				s.UpdateErrorStatus(err)
 				return
 			}

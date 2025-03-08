@@ -6,6 +6,15 @@ server:
   low_latency: true
   interrupt: true
   semantic_interrupt: false
+
+log:
+  level: info
+  file: logs/streamlink.log
+  max_size: 100     # maximum size in megabytes before rotation (default: 100)
+  max_backups: 5    # maximum number of old log files to retain (default: 5)
+  max_age: 30       # maximum number of days to retain old log files (default: 30)
+  compress: true    # compress rotated files (default: true)
+
 llm:
   type: openai
   openai:
@@ -13,15 +22,17 @@ llm:
     base_url: https://api.siliconflow.cn/v1
     model: Qwen/Qwen2.5-14B-Instruct
     temperature: 0.5
-    max_tokens: 1000
+    max_tokens: 3000
+
 asr:
   type: tencent
   tencent_asr:
     app_id: $TENCENTASR_APP_ID
     secret_id: $TENCENTASR_SECRET_ID
     secret_key: $TENCENTASR_SECRET_KEY
-    engine_model_type: 16k_zh
+    engine_model_type: 16k_zh_large
     slice_size: 6400
+
 tts:
   type: tencent
   tencent_tts:

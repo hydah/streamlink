@@ -76,6 +76,7 @@ func (l *mockListener) OnTextResult(response map[string]interface{}) {
 	if result, ok := response["result"].(map[string]interface{}); ok {
 		if subtitles, ok := result["subtitles"].([]interface{}); ok {
 			var fullText strings.Builder
+			fmt.Printf("subtitles: %v\n", subtitles)
 			for _, sub := range subtitles {
 				if subtitle, ok := sub.(map[string]interface{}); ok {
 					if text, ok := subtitle["Text"].(string); ok {
@@ -101,14 +102,14 @@ func (l *mockListener) OnSynthesisFail(response map[string]interface{}) {
 func (l *mockListener) OnAudioResult(audioBytes []byte) {
 	l.Lock()
 	defer l.Unlock()
-	log.Printf("OnAudioResult: %d bytes", len(audioBytes))
+	log.Printf("OnAudioResult: %d bytes\n", len(audioBytes))
 	if len(audioBytes) == 0 {
-		fmt.Printf("time: %v, cur end", time.Now())
+		fmt.Printf("time: %v, cur end\n", time.Now())
 		l.audioSegments[l.currentText] = l.audioReceived
 		l.audioReceived = make([]byte, 0)
 		return
 	}
-	fmt.Printf("time: %v, cur data", time.Now())
+	fmt.Printf("time: %v, cur data\n", time.Now())
 
 	l.audioReceived = append(l.audioReceived, audioBytes...)
 }
@@ -133,12 +134,14 @@ func TestFlowingSpeechSynthesizer_Basic(t *testing.T) {
 	listener := newMockListener()
 
 	// 创建合成器
-	synthesizer := NewFlowingSpeechSynthesizer(appID, credential, listener)
+	synthesizer := NewFlowingSpeechSynthesizer(appID, fmt.Sprintf("TTS_Flow_%d", time.Now().UnixNano()), credential, listener)
 	assert.NotNil(t, synthesizer)
 
 	// 设置参数
 	// 301037
-	synthesizer.SetVoiceType(601000)
+	// 502001
+	// 601000
+	synthesizer.SetVoiceType(301037)
 	synthesizer.SetCodec("mp3")
 	synthesizer.SetSampleRate(16000)
 	synthesizer.SetVolume(0)
@@ -208,7 +211,7 @@ func TestFlowingSpeechSynthesizer_Parameters(t *testing.T) {
 		SecretKey: "test-key",
 	}
 	listener := newMockListener()
-	synthesizer := NewFlowingSpeechSynthesizer(502001, credential, listener)
+	synthesizer := NewFlowingSpeechSynthesizer(502001, fmt.Sprintf("TTS_Flow_%d", time.Now().UnixNano()), credential, listener)
 
 	// 测试参数设置
 	testCases := []struct {
@@ -281,10 +284,10 @@ func TestFlowingSpeechSynthesizer_SignatureGeneration(t *testing.T) {
 		SecretKey: "test-key",
 	}
 	listener := newMockListener()
-	synthesizer := NewFlowingSpeechSynthesizer(502001, credential, listener)
+	synthesizer := NewFlowingSpeechSynthesizer(502001, fmt.Sprintf("TTS_Flow_%d", time.Now().UnixNano()), credential, listener)
 
 	// 测试参数生成
-	params := synthesizer.genParams("test-session")
+	params := synthesizer.genParams()
 	assert.Equal(t, _ACTION, params["Action"])
 	assert.Equal(t, int64(502001), params["AppId"])
 	assert.Equal(t, "test-id", params["SecretId"])
@@ -310,7 +313,7 @@ func TestFlowingSpeechSynthesizer_MessageHandling(t *testing.T) {
 		SecretKey: secretKey,
 	}
 	listener := newMockListener()
-	synthesizer := NewFlowingSpeechSynthesizer(appID, credential, listener)
+	synthesizer := NewFlowingSpeechSynthesizer(appID, fmt.Sprintf("TTS_Flow_%d", time.Now().UnixNano()), credential, listener)
 	synthesizer.SetCodec("mp3")
 
 	// 启动合成器
@@ -368,7 +371,7 @@ func TestFlowingSpeechSynthesizer_ErrorHandling(t *testing.T) {
 		SecretKey: "invalid-key",
 	}
 	listener := newMockListener()
-	synthesizer := NewFlowingSpeechSynthesizer(502001, credential, listener)
+	synthesizer := NewFlowingSpeechSynthesizer(502001, fmt.Sprintf("TTS_Flow_%d", time.Now().UnixNano()), credential, listener)
 
 	// 启动合成器
 	err := synthesizer.Start()
@@ -385,7 +388,7 @@ func TestFlowingSpeechSynthesizer_ErrorHandling(t *testing.T) {
 	// 测试无效的参数
 	synthesizer.SetVoiceType(-1)
 	synthesizer.SetSampleRate(-1)
-	params := synthesizer.genParams("test-session")
+	params := synthesizer.genParams()
 	assert.Equal(t, int64(-1), params["VoiceType"])
 	assert.Equal(t, -1, params["SampleRate"])
 }
@@ -396,7 +399,7 @@ func TestFlowingSpeechSynthesizer_RequestMessage(t *testing.T) {
 		SecretKey: "test-key",
 	}
 	listener := newMockListener()
-	synthesizer := NewFlowingSpeechSynthesizer(502001, credential, listener)
+	synthesizer := NewFlowingSpeechSynthesizer(502001, fmt.Sprintf("TTS_Flow_%d", time.Now().UnixNano()), credential, listener)
 	synthesizer.sessionID = "test-session"
 
 	// 测试请求消息格式

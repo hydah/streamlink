@@ -2,9 +2,9 @@ package codec
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/pipeline"
 
 	"github.com/hraban/opus"
@@ -40,7 +40,7 @@ func NewOpusDecoder(sampleRateIn, channelsIn int) (*OpusDecoder, error) {
 }
 
 func (d *OpusDecoder) handleInterrupt(packet pipeline.Packet) {
-	log.Printf("**%s** Received interrupt command for turn %d", d.GetName(), packet.TurnSeq)
+	logger.Info("**%s** Received interrupt command for turn %d", d.GetName(), packet.TurnSeq)
 	d.IncrTurnSeq()
 
 	d.ForwardPacket(packet)
@@ -67,7 +67,7 @@ func (d *OpusDecoder) processAudio(audioPacket AudioPacket, packet pipeline.Pack
 		if strings.Contains(err.Error(), "no data supplied") {
 			return
 		}
-		log.Printf("**%s** Decoding failed: %v", d.GetName(), err)
+		logger.Error("**%s** Decoding failed: %v", d.GetName(), err)
 		d.UpdateErrorStatus(err)
 		return
 	}
@@ -86,7 +86,7 @@ func (d *OpusDecoder) Process(packet pipeline.Packet) {
 	select {
 	case d.GetInputChan() <- packet:
 	default:
-		log.Printf("**%s** Input channel full, dropping packet", d.GetName())
+		logger.Error("**%s** Input channel full, dropping packet", d.GetName())
 	}
 }
 

@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"log"
-
+	// Mantener temporalmente para compatibilidad
 	"streamlink/internal/config"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/server"
 
 	"github.com/gin-gonic/gin"
@@ -13,13 +13,15 @@ import (
 func main() {
 	// 设置 gin 为 release 模式，关闭调试信息
 	gin.SetMode(gin.ReleaseMode)
-	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 
 	// 加载配置
 	config, err := config.LoadConfig("config/config.yaml")
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		logger.Fatal("Failed to load config: %v", err)
 	}
+
+	logger.InitLogger(&config.Log)
+	defer logger.Sync()
 
 	// 创建 Gin 引擎
 	r := gin.Default()
@@ -30,7 +32,7 @@ func main() {
 
 	server := server.NewVoiceAgentServer()
 	if err := server.Init(config); err != nil {
-		log.Fatalf("Failed to initialize WHIP server: %v", err)
+		logger.Fatal("Failed to initialize WHIP server: %v", err)
 	}
 
 	// 设置 WHIP 端点
@@ -38,8 +40,8 @@ func main() {
 	// 会话管理端点
 	r.DELETE("/whip/sessions/:id", server.HandleDelete)
 
-	log.Printf("Starting VoiceAgent server on :%d\n", config.Server.HTTPPort)
+	logger.Info("Link Start")
 	if err := r.Run(fmt.Sprintf(":%d", config.Server.HTTPPort)); err != nil {
-		panic(err)
+		logger.Fatal("Failed to start server: %v", err)
 	}
 }

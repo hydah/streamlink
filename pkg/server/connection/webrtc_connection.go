@@ -2,10 +2,10 @@ package connection
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"streamlink/internal/config"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/codec"
 	"streamlink/pkg/logic/flux"
 	"streamlink/pkg/logic/pipeline"
@@ -139,23 +139,23 @@ func (f *WebRTCFactory) CreateConnection(cfg *config.Config) (Connection, error)
 			return
 		}
 		// 设置远程音轨并启动 source
-		log.Printf("set remote track")
+		logger.Info("set remote track")
 		conn.source.(interface{ SetTrack(*webrtc.TrackRemote) }).SetTrack(remoteTrack)
 		if err := conn.source.Start(); err != nil {
-			log.Printf("Failed to start WebRTC source: %v", err)
+			logger.Error("Failed to start WebRTC source: %v", err)
 		}
 	})
 
 	peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate != nil {
-			fmt.Println("Generated ICE candidate:", candidate)
+			logger.Info("Generated ICE candidate: %s", candidate)
 		} else {
-			fmt.Println("ICE Candidate gathering finished")
+			logger.Info("ICE Candidate gathering finished")
 		}
 	})
 
 	peerConnection.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
-		fmt.Printf("ICE Connection State has changed: %s\n", state.String())
+		logger.Info("ICE Connection State has changed: %s", state.String())
 		if state == webrtc.ICEConnectionStateDisconnected || state == webrtc.ICEConnectionStateFailed {
 			conn.Stop()
 		}
@@ -169,30 +169,30 @@ func (f *WebRTCFactory) CreateConnection(cfg *config.Config) (Connection, error)
 
 func (c *WebRTCConnection) setupCallbacks() {
 	c.peerConnection.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
-		log.Printf("[%s] ICE Connection State changed: %s\n", c.id, state.String())
+		logger.Info("[%s] ICE Connection State changed: %s", c.id, state.String())
 	})
 
 	c.peerConnection.OnSignalingStateChange(func(state webrtc.SignalingState) {
-		log.Printf("[%s] Signaling State changed: %s\n", c.id, state.String())
+		logger.Info("[%s] Signaling State changed: %s", c.id, state.String())
 	})
 
 	c.peerConnection.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		log.Printf("[%s] Connection State changed: %s\n", c.id, state.String())
+		logger.Info("[%s] Connection State changed: %s", c.id, state.String())
 	})
 
 	c.peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate != nil {
-			log.Println("Local ICE candidate:", candidate.String())
+			logger.Info("Local ICE candidate:", candidate.String())
 		}
 	})
 
 	c.peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
-		log.Printf("[%s] New DataChannel: %s\n", c.id, d.Label())
+		logger.Info("[%s] New DataChannel: %s\n", c.id, d.Label())
 	})
 }
 
 func (c *WebRTCConnection) Start() error {
-	log.Println("WebRTC Connection start")
+	logger.Info("WebRTC Connection start")
 
 	if c.source == nil {
 		return fmt.Errorf("no audio source available")

@@ -3,6 +3,7 @@ package tts
 import (
 	"fmt"
 	"log"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/pipeline"
 	"sync"
 	"time"
@@ -58,7 +59,7 @@ func (t *TencentTTS) processPacket(packet pipeline.Packet) {
 
 	switch data := packet.Data.(type) {
 	case string:
-		log.Printf("**%s** Processing turn_seq=%d , text: %s", t.GetName(), packet.TurnSeq, data)
+		logger.Info("**%s** Processing turn_seq=%d , text: %s", t.GetName(), packet.TurnSeq, data)
 		t.mu.Lock()
 		defer t.mu.Unlock()
 
@@ -79,7 +80,7 @@ func (t *TencentTTS) processPacket(packet pipeline.Packet) {
 
 		// 开始合成
 		if err := t.synthesizer.Synthesis(); err != nil {
-			log.Printf("Synthesis failed: %v", err)
+			logger.Error("Synthesis failed: %v", err)
 			t.UpdateErrorStatus(err)
 			return
 		}
@@ -133,7 +134,7 @@ func (t *TencentTTS) Process(packet pipeline.Packet) {
 	select {
 	case t.GetInputChan() <- packet:
 	default:
-		log.Printf("TencentTTS: input channel full, dropping packet")
+		logger.Error("TencentTTS: input channel full, dropping packet")
 	}
 }
 

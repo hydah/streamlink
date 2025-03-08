@@ -7,13 +7,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"streamlink/pkg/logger"
 
 	"github.com/gorilla/websocket"
 )
@@ -62,9 +63,10 @@ type Credential struct {
 }
 
 // NewFlowingSpeechSynthesizer 创建新的流式语音合成器
-func NewFlowingSpeechSynthesizer(appID int64, credential *Credential, listener FlowingSpeechSynthesisListener) *FlowingSpeechSynthesizer {
+func NewFlowingSpeechSynthesizer(appID int64, sessionID string, credential *Credential, listener FlowingSpeechSynthesisListener) *FlowingSpeechSynthesizer {
 	return &FlowingSpeechSynthesizer{
 		appID:            appID,
+		sessionID:        sessionID,
 		credential:       credential,
 		status:           0, // NOTOPEN
 		listener:         listener,
@@ -80,6 +82,10 @@ func NewFlowingSpeechSynthesizer(appID int64, credential *Credential, listener F
 		emotionCategory:  "",
 		emotionIntensity: 100,
 	}
+}
+
+func (s *FlowingSpeechSynthesizer) GetSessionID() string {
+	return s.sessionID
 }
 
 // SetVoiceType 设置音色
@@ -147,8 +153,7 @@ func (s *FlowingSpeechSynthesizer) genSignature(params map[string]interface{}) s
 }
 
 // genParams 生成请求参数
-func (s *FlowingSpeechSynthesizer) genParams(sessionID string) map[string]interface{} {
-	s.sessionID = sessionID
+func (s *FlowingSpeechSynthesizer) genParams() map[string]interface{} {
 	params := make(map[string]interface{})
 	params["Action"] = _ACTION
 	params["AppId"] = s.appID
@@ -221,14 +226,17 @@ func (s *FlowingSpeechSynthesizer) doSend(action, text string) error {
 
 // Process 处理合成请求
 func (s *FlowingSpeechSynthesizer) Process(text string, action string) error {
-	log.Printf("process: action=%s data=%s", action, text)
+	if !s.ready {
+		return fmt.Errorf("synthesizer not ready")
+	}
+	// logger.Debug("process: action=%s data=%s", action, text)
 	return s.doSend(action, text)
 }
 
 // Complete 完成合成
 func (s *FlowingSpeechSynthesizer) Complete(action string) error {
-	log.Printf("complete: action=%s", action)
-	return s.doSend(action, "")
+	logger.Info("complete: action=%s", action)
+	return s.doSend("END", "")
 }
 
 // WaitReady 等待就绪
@@ -248,17 +256,17 @@ func (s *FlowingSpeechSynthesizer) WaitReady(timeoutMs int) bool {
 
 // Start 启动合成器
 func (s *FlowingSpeechSynthesizer) Start() error {
-	log.Println("synthesizer start: begin")
+	logger.Debug("synthesizer start: begin")
 
 	// 生成参数和签名
-	sessionID := strconv.FormatInt(time.Now().UnixNano(), 10)
-	params := s.genParams(sessionID)
+
+	params := s.genParams()
 	signature := s.genSignature(params)
 
 	// 构建 WebSocket URL
 	reqURL := s.createQueryString(params)
 	reqURL += "&Signature=" + url.QueryEscape(signature)
-	log.Printf("reqURL: %s", reqURL)
+	logger.Info("reqURL: %s", reqURL)
 	// 连接 WebSocket
 	dialer := websocket.Dialer{}
 	ws, _, err := dialer.Dial(reqURL, nil)
@@ -273,8 +281,8 @@ func (s *FlowingSpeechSynthesizer) Start() error {
 	s.wst.Add(1)
 	go s.messageLoop()
 
-	s.listener.OnSynthesisStart(sessionID)
-	log.Println("synthesizer start: end")
+	s.listener.OnSynthesisStart(s.sessionID)
+	logger.Debug("synthesizer start: end")
 	return nil
 }
 
@@ -291,7 +299,7 @@ func (s *FlowingSpeechSynthesizer) messageLoop() {
 			messageType, data, err := s.ws.ReadMessage()
 			if err != nil {
 				if !strings.Contains(err.Error(), "websocket: close") {
-					log.Printf("read message error: %v", err)
+					logger.Error("read message error: %v", err)
 				}
 				return
 			}
@@ -304,37 +312,37 @@ func (s *FlowingSpeechSynthesizer) messageLoop() {
 				var resp map[string]interface{}
 
 				if err := json.Unmarshal(data, &resp); err != nil {
-					log.Printf("unmarshal response error: %v", err)
+					logger.Error("unmarshal response error: %v", err)
 					continue
 				}
 
-				// log.Printf("resp: %+v", resp)
+				// logger.Debug("resp: %+v", resp)
 				if code, ok := resp["code"].(float64); ok && code != 0 {
-					log.Printf("server synthesis fail: %v", resp)
+					logger.Error("%s server synthesis fail: %v", s.sessionID, resp)
 					s.listener.OnSynthesisFail(resp)
 					return
 				}
 
 				if final, ok := resp["final"].(float64); ok && final == 1 {
-					log.Println("recv FINAL frame")
+					logger.Info("%s recv FINAL frame", s.sessionID)
 					s.status = 3 // FINAL
 					s.listener.OnSynthesisEnd()
 					return
 				}
 
 				if ready, ok := resp["ready"].(float64); ok && ready == 1 {
-					log.Println("recv READY frame")
+					logger.Info("%s recv READY frame", s.sessionID)
 					s.ready = true
 					continue
 				}
 
 				if heatbeat, ok := resp["heartbeat"].(float64); ok && heatbeat == 1 {
-					log.Println("recv HEARTBEAT frame")
+					logger.Debug("%s recv HEARTBEAT frame", s.sessionID)
 					continue
 				}
 
 				// 处理文本结果消息
-				// log.Printf("resp result: %+v", resp["result"])
+				// logger.Debug("resp result: %+v", resp["result"])
 				if result, ok := resp["result"].(map[string]interface{}); ok {
 					if subtitles, ok := result["subtitles"].([]interface{}); ok {
 						if len(subtitles) > 0 {
@@ -354,6 +362,7 @@ func (s *FlowingSpeechSynthesizer) Wait() {
 
 // Stop 停止合成器
 func (s *FlowingSpeechSynthesizer) Stop() {
+	s.ready = false
 	close(s.stopCh)
 	if s.ws != nil {
 		s.ws.Close()

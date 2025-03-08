@@ -2,9 +2,9 @@ package dumper
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/codec"
 	"streamlink/pkg/logic/pipeline"
 
@@ -46,7 +46,7 @@ func NewOggDumper(sampleRateIn uint32, channelsIn uint16, fileName string) (*Ogg
 }
 
 func (d *OggDumper) handleInterrupt(packet pipeline.Packet) {
-	log.Printf("**%s** Received interrupt command for turn %d", d.GetName(), packet.TurnSeq)
+	logger.Info("**%s** Received interrupt command for turn %d", d.GetName(), packet.TurnSeq)
 
 	d.SetCurTurnSeq(packet.TurnSeq)
 
@@ -63,7 +63,7 @@ func (d *OggDumper) processPacket(packet pipeline.Packet) {
 	switch data := packet.Data.(type) {
 	case *rtp.Packet:
 		if err := d.oggFile.WriteRTP(data); err != nil {
-			log.Printf("**%s** Failed to write RTP to OGG: %v", d.GetName(), err)
+			logger.Error("**%s** Failed to write RTP to OGG: %v", d.GetName(), err)
 			d.UpdateErrorStatus(err)
 			return
 		}
@@ -83,7 +83,7 @@ func (d *OggDumper) processPacket(packet pipeline.Packet) {
 		}
 
 		if err := d.oggFile.WriteRTP(rtpPacket); err != nil {
-			log.Printf("**%s** Failed to write AudioPacket to OGG: %v", d.GetName(), err)
+			logger.Error("**%s** Failed to write AudioPacket to OGG: %v", d.GetName(), err)
 			d.UpdateErrorStatus(err)
 			return
 		}
@@ -113,7 +113,7 @@ func (d *OggDumper) Process(packet pipeline.Packet) {
 	select {
 	case d.GetInputChan() <- packet:
 	default:
-		log.Printf("**%s** Input channel full, dropping packet", d.GetName())
+		logger.Error("**%s** Input channel full, dropping packet", d.GetName())
 	}
 }
 

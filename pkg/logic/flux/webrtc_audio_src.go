@@ -3,7 +3,7 @@ package flux
 import (
 	"fmt"
 	"io"
-	"log"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/codec"
 	"streamlink/pkg/logic/pipeline"
 	"time"
@@ -45,7 +45,7 @@ func (s *WebRTCSource) Start() error {
 		LastUpdateTime: time.Now(),
 	})
 
-	log.Printf("Started src component **%s**", s.GetName())
+	logger.Info("Started src component **%s**", s.GetName())
 	// 启动 RTP 包读取循环
 	go s.readLoop()
 
@@ -70,7 +70,7 @@ func (s *WebRTCSource) readLoop() {
 				if err == io.EOF {
 					return
 				}
-				log.Printf("**%s** Failed to read RTP packet: %v", s.GetName(), err)
+				logger.Error("**%s** Failed to read RTP packet: %v", s.GetName(), err)
 				s.UpdateErrorStatus(err)
 				continue
 			}

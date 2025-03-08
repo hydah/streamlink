@@ -2,7 +2,7 @@ package pipeline
 
 import (
 	"fmt"
-	"log"
+	"streamlink/pkg/logger"
 	"strings"
 	"time"
 )
@@ -87,7 +87,7 @@ func (tm *TurnManager) processPacket(packet Packet) {
 		return
 	}
 
-	log.Printf("**%s** forward packet:%v", tm.GetName(), packet)
+	logger.Info("**%s** forward packet:%v", tm.GetName(), packet)
 	// 2. 转发其他类型的包
 	tm.ForwardPacket(packet)
 }
@@ -105,10 +105,10 @@ func (tm *TurnManager) handleASRResult(text string, packet Packet) {
 	if tm.shouldCreateNewTurn() {
 		tm.IncrTurnSeq()
 
-		log.Printf("TurnManager: start new turn, seq: %d, cur text: %s", tm.GetCurTurnSeq(), tm.sentenceBuffer)
+		logger.Info("TurnManager: start new turn, seq: %d, cur text: %s", tm.GetCurTurnSeq(), tm.sentenceBuffer)
 
 		// 1. 先发送语义打断指令
-		if !tm.GetIgnoreTurn() {
+		if tm.GetUseInterrupt() {
 			tm.broadcastInterrupt(tm.GetCurTurnSeq(), InterruptTypeSemantic)
 		}
 
@@ -206,7 +206,7 @@ func (tm *TurnManager) broadcastInterrupt(turnSeq int, interruptType InterruptTy
 		TurnSeq: turnSeq,
 	}
 	tm.ForwardPacket(packet)
-	log.Printf("TurnManager: Broadcasting interrupt type=%v for turn %d", interruptType, turnSeq)
+	logger.Info("[TurnSeq: %d] TurnManager: Broadcasting interrupt type=%v", turnSeq, interruptType)
 }
 
 // GetID 实现 Component 接口
@@ -219,7 +219,7 @@ func (tm *TurnManager) Process(packet Packet) {
 	select {
 	case tm.GetInputChan() <- packet:
 	default:
-		log.Printf("**%s** Input channel full, dropping packet", tm.GetName())
+		logger.Error("**%s** Input channel full, dropping packet", tm.GetName())
 	}
 }
 

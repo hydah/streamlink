@@ -2,7 +2,7 @@ package codec
 
 import (
 	"fmt"
-	"log"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/pipeline"
 	"time"
 
@@ -51,7 +51,7 @@ func NewOpusEncoder(sampleRate, channels int) (*OpusEncoder, error) {
 
 // handleInterrupt 处理打断指令
 func (e *OpusEncoder) handleInterrupt(packet pipeline.Packet) {
-	log.Printf("**%s** Received interrupt command for turn %d", e.GetName(), packet.TurnSeq)
+	logger.Info("**%s** Received interrupt command for turn %d", e.GetName(), packet.TurnSeq)
 	e.SetCurTurnSeq(packet.TurnSeq)
 
 	// 立即转发打断指令并清空缓冲区
@@ -66,7 +66,7 @@ func (e *OpusEncoder) processPacket(packet pipeline.Packet) {
 
 	// 如果是新的轮次，更新 curTurnSeq 并清空缓冲区
 	if packet.TurnSeq < e.GetCurTurnSeq() {
-		log.Printf("**%s** cur turn: %d, drop old turn packet(seq: %d)", e.GetName(), e.GetCurTurnSeq(), packet.TurnSeq)
+		logger.Info("**%s** cur turn: %d, drop old turn packet(seq: %d)", e.GetName(), e.GetCurTurnSeq(), packet.TurnSeq)
 		e.dataBuffer = e.dataBuffer[:0]
 		return
 	}
@@ -85,7 +85,7 @@ func (e *OpusEncoder) processPacket(packet pipeline.Packet) {
 	case e.encodeChan <- encodeRequest{data: e.dataBuffer, turnSeq: packet.TurnSeq}:
 		// print turn_metric_stat
 		for _, k := range packet.TurnMetricKeys {
-			log.Printf("turn_metric_stat: %s, %d, %d, latency: %d ms", k,
+			logger.Info("turn_metric_stat: %s, %d, %d, latency: %d ms", k,
 				packet.TurnMetricStat[k].TurnStartTs,
 				packet.TurnMetricStat[k].TurnEndTs,
 				packet.TurnMetricStat[k].TurnEndTs-packet.TurnMetricStat[k].TurnStartTs)
@@ -97,7 +97,7 @@ func (e *OpusEncoder) processPacket(packet pipeline.Packet) {
 
 		e.dataBuffer = make([]int16, 0) // 清空缓冲区
 	default:
-		log.Printf("**%s** Encode channel full, dropping data", e.GetName())
+		logger.Error("**%s** Encode channel full, dropping data", e.GetName())
 	}
 }
 
@@ -107,7 +107,7 @@ func (e *OpusEncoder) encodeLoop() {
 		data := req.data
 		for len(data) >= e.frameSize {
 			if req.turnSeq < e.GetCurTurnSeq() {
-				log.Printf("**%s** encode loop drop old turn packet(seq: %d)", e.GetName(), req.turnSeq)
+				logger.Debug("**%s** encode loop drop old turn packet(seq: %d)", e.GetName(), req.turnSeq)
 				break
 			}
 
@@ -118,7 +118,7 @@ func (e *OpusEncoder) encodeLoop() {
 			opusFrame := make([]byte, 2048)
 			n, err := e.opusEncoder.Encode(frame, opusFrame)
 			if err != nil {
-				log.Printf("**%s** Opus encoding failed: %v", e.GetName(), err)
+				logger.Error("**%s** Opus encoding failed: %v", e.GetName(), err)
 				e.UpdateErrorStatus(err)
 				break
 			}
@@ -166,7 +166,7 @@ func (e *OpusEncoder) Process(packet pipeline.Packet) {
 	select {
 	case e.GetInputChan() <- packet:
 	default:
-		log.Printf("**%s** Input channel full, dropping packet", e.GetName())
+		logger.Error("**%s** Input channel full, dropping packet", e.GetName())
 	}
 }
 

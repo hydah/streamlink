@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"streamlink/internal/config"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/server/connection"
 
 	"github.com/pion/ice/v4"
@@ -92,7 +93,7 @@ func (s *WHIPServer) HandleNewConnection(offer *webrtc.SessionDescription) (*web
 		conn.Stop()
 		return nil, "", err
 	}
-	log.Printf("answer: %v", answer)
+	logger.Info("answer: %v", answer)
 
 	// 启动连接
 	if err := conn.Start(); err != nil {

@@ -2,10 +2,10 @@ package dumper
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"streamlink/internal/protocol/wav"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/pipeline"
 )
 
@@ -69,7 +69,7 @@ func NewWAVDumper(fileName string, sampleRate uint32, channels uint16) (*WAVDump
 }
 
 func (d *WAVDumper) handleInterrupt(packet pipeline.Packet) {
-	log.Printf("**%s** Received interrupt command for turn %d", d.GetName(), packet.TurnSeq)
+	logger.Info("**%s** Received interrupt command for turn %d", d.GetName(), packet.TurnSeq)
 	d.SetCurTurnSeq(packet.TurnSeq)
 
 	d.ForwardPacket(packet)
@@ -85,7 +85,7 @@ func (d *WAVDumper) processPacket(packet pipeline.Packet) {
 	if data, ok := packet.Data.([]int16); ok {
 		// 写入 WAV 数据
 		if err := d.writer.WriteSamples(data); err != nil {
-			log.Printf("**%s** Failed to write WAV data: %v", d.GetName(), err)
+			logger.Error("**%s** Failed to write WAV data: %v", d.GetName(), err)
 			d.UpdateErrorStatus(err)
 		}
 
@@ -123,7 +123,7 @@ func (d *WAVDumper) Process(packet pipeline.Packet) {
 	select {
 	case d.GetInputChan() <- packet:
 	default:
-		log.Printf("**%s** Input channel full, dropping packet", d.GetName())
+		logger.Error("**%s** Input channel full, dropping packet", d.GetName())
 	}
 }
 

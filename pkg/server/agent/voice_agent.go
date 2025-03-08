@@ -2,10 +2,10 @@ package agent
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"streamlink/internal/config"
+	"streamlink/pkg/logger"
 	"streamlink/pkg/logic/flux"
 	"streamlink/pkg/logic/llm"
 	"streamlink/pkg/logic/pipeline"
@@ -70,7 +70,9 @@ func NewVoiceAgent(config *config.Config, source flux.Source, sink flux.Sink, pr
 	)
 	llmInstance.SetModel(config.LLM.OpenAI.Model)
 	// Configure LLM streaming based on low latency mode
-	llmInstance.SetStreaming(config.Server.LowLatency)
+	if config.Server.LowLatency {
+		llmInstance.SetStreaming(true)
+	}
 
 	// 创建 TTS 实例
 	appIDStr = config.TTS.TencentTTS.AppID
@@ -79,7 +81,7 @@ func NewVoiceAgent(config *config.Config, source flux.Source, sink flux.Sink, pr
 	}
 	appID, err := strconv.ParseInt(appIDStr, 10, 64)
 	if err != nil {
-		log.Printf("Failed to parse appID: %v", err)
+		logger.Error("Failed to parse appID: %v", err)
 		appID = 0
 	}
 	secretID = config.TTS.TencentTTS.SecretID
@@ -93,7 +95,7 @@ func NewVoiceAgent(config *config.Config, source flux.Source, sink flux.Sink, pr
 
 	var ttsInstance interface{ pipeline.Component }
 	if config.Server.LowLatency {
-		ttsInstance = tts.NewTencentTTS2(
+		ttsInstance = tts.NewTencentStreamTTS(
 			appID,
 			secretID,
 			secretKey,
@@ -138,21 +140,21 @@ func (v *VoiceAgent) Start() error {
 
 	// 创建 TurnManager
 	v.turnManager = pipeline.NewTurnManager(pipeline.DefaultTurnManagerConfig())
-	v.turnManager.SetIgnoreTurn(!v.config.Server.Interrupt)
-
+	v.turnManager.SetIgnoreTurn(true)
+	v.turnManager.SetUseInterrupt(v.config.Server.Interrupt)
 	// 获取基础组件
 	components := flux.GenComponents(v.processor.ProcessInput(v.source),
 		v.processor.ProcessOutput(v.sink),
 		v.asr, v.turnManager, v.llm, v.tts)
 
 	if err := pipe.Connect(components...); err != nil {
-		log.Println("Failed to connect output chain:", err)
+		logger.Error("Failed to connect output chain:", err)
 		return err
 	}
 
 	// 启动 pipeline
 	if err := pipe.Start(); err != nil {
-		log.Println("Failed to start pipeline:", err)
+		logger.Error("Failed to start pipeline:", err)
 		return err
 	}
 
