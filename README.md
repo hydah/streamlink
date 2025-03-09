@@ -156,3 +156,6 @@ pipe.Connect(components...)
 4. 推送到分支
 5. 创建 Pull Request
 
+# 关于我
+我在腾讯云负责TRTC 后台的部分工作。目前在探索 RTC+AI的方向。以下是我的个人微信，欢迎添加好友（备注来意）
+![f86a9a0a48722314c6ba3bd79677fdc7](https://github.com/user-attachments/assets/18e09570-c010-4bb7-8bbb-12697bb3e0b8)
